@@ -49,6 +49,7 @@ import {scaleLinear, scalePoint} from 'd3-scale';
 import {min, max, merge} from 'd3-array';
 import {line, curveMonotoneX} from 'd3-shape';
 import {axisBottom} from 'd3-axis';
+import * as d3 from 'd3';
 
 /**
  * Calculate minimum spacing needed to prevent overlapping labels
@@ -300,6 +301,196 @@ const storylineLayers = [
 
       paths.exit()
         .remove();
+    }
+  },
+  {
+    name: 'event-labels',
+    callback: (selection, {data, x, y, padding, width}) => {
+      // Create event labels for important interactions only to reduce clutter
+      const storylinesData = data.interactions || data.storylines || [];
+      const filteredData = storylinesData.filter(d => {
+        // Show labels for grouped interactions with important events or death events
+        const hasImportantEvents = d.values.some(val => val.data && val.data._eventImportant);
+        const hasDeathEvents = d.values.some(val => val.data && val.data._eventDeath);
+        const hasEvents = d.values.some(val => val.data && val.data._eventDescription);
+        
+        // Only show for grouped interactions (🔗) or important/death events
+        return (d.key.includes('🔗') && hasEvents) || hasImportantEvents || hasDeathEvents;
+      });
+      
+      const eventLabels = selection.selectAll('g.event-label')
+        .data(filteredData, d => d.key);
+
+      const eventLabels_enter = eventLabels.enter()
+        .append('g')
+        .attr('class', 'event-label');
+
+      eventLabels_enter.append('text')
+        .attr('class', 'event-description')
+        .style('font-size', '12px')
+        .style('font-family', 'Arial, sans-serif')
+        .style('fill', '#333')
+        .style('text-anchor', 'middle')
+        .style('pointer-events', 'all')
+        .style('font-weight', 'bold')
+        .style('cursor', 'pointer')
+        .style('text-shadow', '0 0 3px rgba(255,255,255,0.8)');
+
+      eventLabels_enter.append('rect')
+        .attr('class', 'event-background')
+        .style('fill', 'rgba(255, 255, 255, 0.9)')
+        .style('stroke', '#ccc')
+        .style('stroke-width', '1px')
+        .style('rx', '3px')
+        .style('ry', '3px');
+
+      eventLabels_enter.append('title')
+        .attr('class', 'event-tooltip');
+
+      const eventLabels_merge = eventLabels_enter.merge(eventLabels);
+
+      eventLabels_merge.each(function(d) {
+        const group = d3.select(this);
+        const text = group.select('.event-description');
+        const background = group.select('.event-background');
+        const tooltip = group.select('.event-tooltip');
+        const vals = d.values;
+        
+        // Add a simple test label to verify the layer is working
+        if (d.key.includes('🔗')) {
+          console.log('Creating event label for:', d.key);
+        }
+        
+        // Find all data points with event descriptions
+        const events = [];
+        for (let i = 0; i < vals.length; i++) {
+          const val = vals[i];
+          if (val.data && val.data._eventDescription) {
+            events.push({
+              description: val.data._eventDescription,
+              x: x(val.x),
+              y: y(val.y),
+              date: val.data.date || val.x,
+              originalX: val.x
+            });
+          }
+        }
+        
+        if (events.length > 0) {
+          // Use the first event for the label
+          const event = events[0];
+          
+          // Check if this is an important event
+          const isImportant = vals.some(val => val.data && val.data._eventImportant);
+          const isDeath = vals.some(val => val.data && val.data._eventDeath);
+          
+          // Create a more compact label
+          const maxLength = 25; // Even shorter for better readability
+          const displayText = event.description.length > maxLength ? 
+            event.description.substring(0, maxLength) + '...' : event.description;
+          
+          let fullText = `${event.date}: ${displayText}`;
+          
+          // Add indicators for important events
+          if (isImportant) {
+            fullText = `⚠️ ${fullText}`;
+          }
+          if (isDeath) {
+            fullText = `💀 ${fullText}`;
+          }
+          
+          // Add character count for grouped interactions (shorter)
+          if (d.key.includes('🔗') && charactersInvolved.size > 1) {
+            fullText = `${fullText} (${charactersInvolved.size})`;
+          }
+          
+          // For very long descriptions, use just the year and key words
+          if (event.description.length > 40) {
+            const words = event.description.split(' ').slice(0, 3).join(' ');
+            fullText = `${event.date}: ${words}...`;
+          }
+          
+          // Position the label with better spacing to avoid overlap
+          let labelY = event.y - 35; // More space above the line
+          
+          // Improved collision detection with more spacing
+          const existingLabels = selection.selectAll('g.event-label').nodes();
+          
+          for (let i = 0; i < existingLabels.length; i++) {
+            const existingLabel = existingLabels[i];
+            if (existingLabel !== group.node()) {
+              const existingText = d3.select(existingLabel).select('.event-description');
+              if (!existingText.empty()) {
+                const existingX = parseFloat(existingText.attr('x'));
+                const existingY = parseFloat(existingText.attr('y'));
+                
+                // Check for overlap with more generous spacing
+                if (Math.abs(existingX - event.x) < 120 && Math.abs(existingY - labelY) < 40) {
+                  labelY = event.y + 35; // Move below the line with more space
+                  break;
+                }
+              }
+            }
+          }
+          
+          text.text(fullText)
+            .attr('x', event.x)
+            .attr('y', labelY)
+            .style('opacity', 1)
+            .style('fill', isImportant ? '#e74c3c' : isDeath ? '#8e44ad' : '#333');
+          
+          // Add background rectangle with better padding
+          const bbox = text.node().getBBox();
+          background
+            .attr('x', bbox.x - 10)
+            .attr('y', bbox.y - 6)
+            .attr('width', bbox.width + 20)
+            .attr('height', bbox.height + 12)
+            .style('opacity', 1)
+            .style('fill', isImportant ? 'rgba(231, 76, 60, 0.15)' : isDeath ? 'rgba(142, 68, 173, 0.15)' : 'rgba(255, 255, 255, 0.95)')
+            .style('stroke', isImportant ? '#e74c3c' : isDeath ? '#8e44ad' : '#999')
+            .style('stroke-width', isImportant || isDeath ? '2px' : '1px');
+          
+          // Count characters involved in this interaction
+          const charactersInvolved = new Set();
+          vals.forEach(val => {
+            if (val.data && val.data._eventCharacters) {
+              const chars = val.data._eventCharacters.split(', ').map(c => c.trim());
+              chars.forEach(char => charactersInvolved.add(char));
+            }
+          });
+          
+          // If there are multiple events, add a small indicator
+          if (events.length > 1) {
+            text.text(fullText + ` (+${events.length - 1})`);
+            
+            // Create tooltip with all events
+            const tooltipText = events.map(e => `${e.date}: ${e.description}`).join('\n');
+            tooltip.text(tooltipText);
+          } else {
+            // Single event tooltip
+            const charCount = charactersInvolved.size;
+            const charInfo = charCount > 1 ? ` (${charCount} characters)` : '';
+            tooltip.text(`${event.date}: ${event.description}${charInfo}`);
+          }
+          
+          // Add hover effects
+          text
+            .on('mouseover', function() {
+              d3.select(this).style('font-size', '12px');
+              background.style('fill', 'rgba(255, 255, 255, 1)');
+            })
+            .on('mouseout', function() {
+              d3.select(this).style('font-size', '11px');
+              background.style('fill', 'rgba(255, 255, 255, 0.9)');
+            });
+        } else {
+          text.style('opacity', 0);
+          background.style('opacity', 0);
+        }
+      });
+
+      eventLabels.exit().remove();
     }
   },
   {

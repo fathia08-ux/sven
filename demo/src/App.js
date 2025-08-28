@@ -406,32 +406,44 @@ class App extends Component {
       characterFirstAppearance[characterName] = earliestYear;
     });
     
-    // Define the specific chronological order we want
-    const chronologicalOrder = [1888, 1910, 1920, 1921, 1953, 1986];
+    // Custom character order from top to bottom of the graph
+    const customCharacterOrder = [
+      'Magnus Nielsen (J)',
+      'Martha Nielsen / Eve (M)',
+      'Jonas Kahnwald / Adam (J)',
+      'Bartosz Tiedemann (J)',
+      'Charlotte Doppler (J)',
+      'Agnes',
+      'Noah / Hanno Tauber (J)',
+      'Helge Doppler (J)',
+      'Mikkel Nielsen / Michael Kahnwald (J)',
+      'Erik Obendorf (J)',
+      'Ulrich Nielsen (J)',
+      'Tronte Nielsen (J)',
+      'Elisabeth Doppler (J)',
+      'Mads Nielsen (J)',
+      'Regina Tiedemann (J)'
+    ];
     
-    // Sort characters by the defined chronological order
-    const orderedCharacters = charactersWithEnoughInteractions.sort((a, b) => {
-      const yearA = characterFirstAppearance[a];
-      const yearB = characterFirstAppearance[b];
-      
-      // Find the position of each year in our defined order
-      const orderA = chronologicalOrder.indexOf(yearA);
-      const orderB = chronologicalOrder.indexOf(yearB);
-      
-      // If both years are in our defined order, sort by that order
-      if (orderA !== -1 && orderB !== -1) {
-        return orderA - orderB;
-      }
-      
-      // If only one is in our defined order, prioritize it
-      if (orderA !== -1) return -1;
-      if (orderB !== -1) return 1;
-      
-      // If neither is in our defined order, sort by year
-      return yearA - yearB;
+    console.log('\n=== CHARACTER NAME COMPARISON ===');
+    console.log('Custom order characters:');
+    customCharacterOrder.forEach((char, index) => {
+      const hasEnoughInteractions = charactersWithEnoughInteractions.includes(char);
+      const interactionCount = characterTotalInteractions[char] || 0;
+      console.log(`${index + 1}. ${char} - Has 10+ interactions: ${hasEnoughInteractions} (${interactionCount} interactions)`);
     });
     
-
+    // Filter to only include characters that have enough interactions
+    const orderedCharacters = customCharacterOrder.filter(char => 
+      charactersWithEnoughInteractions.includes(char)
+    );
+    
+    // Add any remaining characters with enough interactions that weren't in the custom order
+    charactersWithEnoughInteractions.forEach(char => {
+      if (!orderedCharacters.includes(char)) {
+        orderedCharacters.push(char);
+      }
+    });
     
     console.log('Characters ordered by first appearance (chronological):');
     orderedCharacters.forEach((char, index) => {
@@ -458,6 +470,12 @@ class App extends Component {
     orderedCharacters.forEach((char, index) => {
       console.log(`${index + 1}. ${char}`);
     });
+    
+    console.log('\n=== CUSTOM ORDER VERIFICATION ===');
+    console.log('Custom order length:', customCharacterOrder.length);
+    console.log('Ordered characters length:', orderedCharacters.length);
+    console.log('Characters with enough interactions length:', charactersWithEnoughInteractions.length);
+    console.log('Custom order matches ordered characters:', JSON.stringify(customCharacterOrder.slice(0, orderedCharacters.length)) === JSON.stringify(orderedCharacters));
     
     // Now create filled data with only characters that have 10+ interactions
     const filledData = [];
@@ -535,8 +553,7 @@ class App extends Component {
     // Debug: log the final ordering
     console.log('Final character order (chronological):');
     orderedCharacters.forEach((char, index) => {
-      const yPosition = index * 200;
-      console.log(`${index + 1}. ${char} (first appears in ${characterFirstAppearance[char]}) - Y-position: ${yPosition}px`);
+      console.log(`${index + 1}. ${char} (first appears in ${characterFirstAppearance[char]})`);
     });
     
     // Assign y positions based on exact order
@@ -693,32 +710,51 @@ class App extends Component {
     
     // FORCE THE ORDER by sorting the interactions array
     if (storylines && storylines.interactions) {
-      console.log('Forcing chronological order by sorting interactions...');
+      console.log('Forcing custom order by sorting interactions...');
+      console.log('Custom order:', orderedCharacters);
       
-      // Create a mapping for the chronological order
+      // Create a mapping for the custom order
       const orderMap = {};
       orderedCharacters.forEach((char, index) => {
         orderMap[char] = index;
       });
       
-      // Sort the interactions array to match our chronological order
+      console.log('Order map:', orderMap);
+      
+      // Sort the interactions array to match our custom order
+      console.log('Before sorting - interaction keys:', storylines.interactions.map(i => i.key));
+      
       storylines.interactions.sort((a, b) => {
+        // Extract the original character name from the prefixed key
         const aName = a.key.replace(/^\d{3}_/, '');
         const bName = b.key.replace(/^\d{3}_/, '');
-        const aOrder = orderMap[aName] !== undefined ? orderMap[aName] : 999;
-        const bOrder = orderMap[bName] !== undefined ? orderMap[bName] : 999;
+        
+        // Get the position from the prefix (first 3 digits)
+        const aPrefix = a.key.match(/^(\d{3})_/);
+        const bPrefix = b.key.match(/^(\d{3})_/);
+        
+        const aOrder = aPrefix ? parseInt(aPrefix[1]) : 999;
+        const bOrder = bPrefix ? parseInt(bPrefix[1]) : 999;
+        
+        console.log(`Comparing: ${aName} (prefix: ${aPrefix ? aPrefix[1] : 'none'}, order: ${aOrder}) vs ${bName} (prefix: ${bPrefix ? bPrefix[1] : 'none'}, order: ${bOrder})`);
+        
         return aOrder - bOrder;
       });
       
-      console.log('Interactions sorted to chronological order:', storylines.interactions.map(i => i.key.replace(/^\d{3}_/, '')));
+      console.log('Interactions sorted to custom order:', storylines.interactions.map(i => i.key.replace(/^\d{3}_/, '')));
       
-      // SIMPLIFIED: Keep fixed positions for now to avoid infinite loop
+      // Force y-positions to match our custom order exactly
       storylines.interactions.forEach((interaction, index) => {
-        const baseY = index * 200; // Base position for this character
+        // Extract the position from the character name prefix
+        const prefix = interaction.key.match(/^(\d{3})_/);
+        const position = prefix ? parseInt(prefix[1]) : index;
+        
+        // Use the position from our custom order, not the array index
+        const baseY = position * 200; // Base position for this character
         interaction.y0 = baseY;
         interaction.y1 = baseY + 100;
         
-        console.log(`Setting ${interaction.key.replace(/^\d{3}_/, '')} to Y-position: ${baseY}px (index: ${index})`);
+        console.log(`Setting ${interaction.key.replace(/^\d{3}_/, '')} to position ${position}, y=${baseY}`);
         
         // Update all data points in this interaction to base position
         interaction.values.forEach(value => {

@@ -30,3 +30,29 @@
     alignment-baseline: text-after-edge;
 }
 
+.storylines-chart .event-label .event-description {
+    font-size: 12px;
+    font-family: Arial, sans-serif;
+    font-weight: bold;
+    fill: #333;
+    text-anchor: middle;
+    pointer-events: all;
+    cursor: pointer;
+    transition: font-size 0.2s ease;
+    text-shadow: 0 0 3px rgba(255,255,255,0.8);
+}
+
+.storylines-chart .event-label .event-description:hover {
+    font-size: 13px;
+    fill: #000;
+    text-shadow: 0 0 4px rgba(255,255,255,1);
+}
+
+.storylines-chart .event-label .event-background {
+    fill: rgba(255, 255, 255, 0.95);
+    stroke: #999;
+    stroke-width: 1px;
+    rx: 4px;
+    ry: 4px;
+}
+
